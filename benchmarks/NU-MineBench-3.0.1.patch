@@ -1,0 +1,604 @@
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..a77143f
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,121 @@
++*~
++*.o
++*.a
++*.la
++
++*.lo
++*.log
++*.status
++
++
++AFI/afi
++
++Apriori/omp_apriori
++
++BIRCH/birch
++
++Bayesian/bayes/src/bcdb
++Bayesian/bayes/src/bci
++Bayesian/bayes/src/bcx
++Bayesian/bayes/src/corr
++Bayesian/matrix/src/invert
++Bayesian/matrix/src/solve
++Bayesian/matrix/src/transp
++Bayesian/table/src/dom
++Bayesian/table/src/opc
++Bayesian/table/src/t1inn
++Bayesian/table/src/tbal
++Bayesian/table/src/tjoin
++Bayesian/table/src/tmerge
++Bayesian/table/src/tnorm
++Bayesian/table/src/tsplit
++Bayesian/table/src/uvins
++Bayesian/table/src/xmat
++
++ECLAT/eclat
++
++HOP/para_hop
++
++KMeans/example
++
++PLSA/parasw
++
++ParETI/pareti
++
++RSEARCH/Makefile
++RSEARCH/squid/Makefile
++RSEARCH/squid/Testsuite/Makefile
++RSEARCH/squid/squid.h
++RSEARCH/squid/squidconf.h
++RSEARCH/makernamat
++RSEARCH/rsearch
++RSEARCH/squid/afetch
++RSEARCH/squid/alistat
++RSEARCH/squid/compalign
++RSEARCH/squid/compstruct
++RSEARCH/squid/revcomp
++RSEARCH/squid/seqsplit
++RSEARCH/squid/seqstat
++RSEARCH/squid/sfetch
++RSEARCH/squid/shuffle
++RSEARCH/squid/sindex
++RSEARCH/squid/sreformat
++RSEARCH/squid/translate
++RSEARCH/squid/version.h
++RSEARCH/squid/weight
++
++
++Recursive_Weak/rw
++Recursive_Weak_pp/rwpp
++
++SEMPHY/programs/NJ/NJ
++SEMPHY/programs/checkCov/checkCov
++SEMPHY/programs/distanceBasedSeqs2TreeSA/distanceBasedSeqs2TreeSA
++SEMPHY/programs/distanceEstimation/distanceEstimation
++SEMPHY/programs/randGamma/randGamma
++SEMPHY/programs/rate4site/rate4site
++SEMPHY/programs/readSeq/readSeq
++SEMPHY/programs/semphy/semphy
++SEMPHY/programs/simulateSequance/simulateSequnce
++SEMPHY/programs/treeUtil/makeSureAllBranchesAreLargerThanEpsilon
++SEMPHY/programs/treeUtil/sametree
++SEMPHY/programs/treeUtil/shortenTree
++
++SNP/pnl.snp/PNL/**/.libs
++SNP/pnl.snp/PNL/**/.deps
++SNP/pnl.snp/PNL/Makefile
++SNP/pnl.snp/PNL/c_pgmtk/Makefile
++SNP/pnl.snp/PNL/c_pgmtk/**/Makefile
++SNP/pnl.snp/PNL/cxcore/Makefile
++SNP/pnl.snp/PNL/cxcore/**/Makefile
++SNP/pnl.snp/PNL/high/Makefile
++SNP/pnl.snp/PNL/high/**/Makefile
++SNP/pnl.snp/PNL/doc/Makefile
++SNP/pnl.snp/PNL/trs/Makefile
++SNP/pnl.snp/PNL/trs/**/Makefile
++
++SNP/pnl.snp/PNL/c_pgmtk/examples/ex_inf_learn_dbn/src/inf_learn_dbn
++SNP/pnl.snp/PNL/c_pgmtk/examples/ex_param/Src/ex_param
++SNP/pnl.snp/PNL/c_pgmtk/examples/gibbs/Src/gibbs
++SNP/pnl.snp/PNL/c_pgmtk/examples/inf_learn_bnet/Src/inf_learn_bnet
++SNP/pnl.snp/PNL/c_pgmtk/examples/learn_param/src/learn_param
++SNP/pnl.snp/PNL/c_pgmtk/examples/linux_test/test_run
++SNP/pnl.snp/PNL/c_pgmtk/examples/mixture_gaussian_bnet/Src/mixture_gaussian_bnet
++SNP/pnl.snp/PNL/c_pgmtk/examples/parPNLTest/src/parPNLTest
++SNP/pnl.snp/PNL/c_pgmtk/examples/testLIMID/src/TestLIMID
++SNP/pnl.snp/PNL/c_pgmtk/examples/testSL/testSEM
++SNP/pnl.snp/PNL/c_pgmtk/examples/testSL/testSL
++SNP/pnl.snp/PNL/c_pgmtk/examples/testSL/testSL_DBN
++SNP/pnl.snp/PNL/c_pgmtk/examples/testSoftMax/src/TestSoftMax
++SNP/pnl.snp/PNL/c_pgmtk/examples/trial/Src/trial
++SNP/pnl.snp/PNL/c_pgmtk/examples/use_matrix/src/use_matrix
++SNP/pnl.snp/PNL/high/examples/example
++SNP/pnl.snp/PNL/libtool
++SNP/pnl.snp/snp/snp
++
++SVM-RFE/svm_mkl
++
++ScalParC/scalparc
++
++Utility_Mining/para_tran_utility/utility_mine
++Utility_Mining/tran_utility/utility_mine
+\ No newline at end of file
+diff --git a/Apriori/Database.C b/Apriori/Database.C
+index 4919c0a..f1882d8 100644
+--- a/Apriori/Database.C
++++ b/Apriori/Database.C
+@@ -91,7 +91,8 @@ int Database_readfrom(char *infile, int * &items, int * & offsets, int pid, int
+ 
+    seconds(t_io_1); 
+    Dbase_file = fopen(infile,"r");
+-   if (Dbase_file < 0){
++   if (Dbase_file == NULL){
++      perror(infile);
+       printf("Error couldn't open file %s\n", infile);
+       exit(-1);
+    }
+@@ -165,6 +166,7 @@ int Database_readfrom(char *infile, int * &items, int * & offsets, int pid, int
+    }
+ 
+    free(buffer);
++   fclose(Dbase_file);
+    return max_trans_sz;
+ }
+ 
+diff --git a/Apriori/Makefile b/Apriori/Makefile
+index 650e256..d0cf552 100644
+--- a/Apriori/Makefile
++++ b/Apriori/Makefile
+@@ -2,8 +2,8 @@ CXX     = g++
+ OMPFLAG = -fopenmp
+ 
+ OPTS	= -g -O2 -DBALT 
+-CFLAGS  = $(OPTS) $(OMPFLAG)
+-LIBS    = -lm 
++CFLAGS  = $(OPTS) $(OMPFLAG) $(shell pkg-config --cflags copper-eval)
++LIBS    = -lm $(shell pkg-config --libs --static copper-eval)
+ 
+ HEADERS = Itemset.h \
+           ListItemset.h \
+diff --git a/Apriori/omp_apriori.C b/Apriori/omp_apriori.C
+index 36e8504..8efaf45 100644
+--- a/Apriori/omp_apriori.C
++++ b/Apriori/omp_apriori.C
+@@ -11,6 +11,7 @@
+ #include <sys/types.h>
+ #include <math.h>
+ #include <string.h>
++#include <copper-eval.h>
+ 
+ #include "Itemset.h"
+ #include "ListItemset.h"
+@@ -560,6 +561,19 @@ void clean_up(){
+ 
+ int main(int argc, char **argv)
+ {
++   if (copper_eval_init()) {
++      perror("copper_eval_init");
++      exit(1);
++   }
++
++   unsigned long jobs = 100;
++   const char* env_jobs = getenv("JOBS");
++   if (env_jobs != NULL) {
++    jobs = atoi(env_jobs);
++   }
++   unsigned long job;
++   for (job = 0; job < jobs; job++) {
++
+    char sumfile[100];
+    
+    parse_args(argc, argv);
+@@ -591,6 +605,12 @@ int main(int argc, char **argv)
+    fflush(stdout);
+    clean_up();
+    fclose(summary);
++
++   copper_eval_iteration(job, 0);
++   }
++   if (copper_eval_finish()) {
++      perror("copper_eval_finish");
++   }
+    exit(0);
+ }
+ 
+diff --git a/HOP/Makefile b/HOP/Makefile
+index 811b201..4501e00 100644
+--- a/HOP/Makefile
++++ b/HOP/Makefile
+@@ -2,8 +2,8 @@
+ CXX     = g++
+ OMPFLAG = -fopenmp
+ 
+-CFLAGS = -O -g -Wno-write-strings $(OMPFLAG)
+-LIB    = -lm
++CFLAGS = -O -g -Wno-write-strings $(OMPFLAG) $(shell pkg-config --cflags copper-eval)
++LIB    = -lm $(shell pkg-config --libs --static copper-eval)
+ 
+ SRCS   = para_hop.c      \
+          para_hop_kd.c   \
+diff --git a/HOP/para_hop.c b/HOP/para_hop.c
+index d13124d..3e0e4b9 100644
+--- a/HOP/para_hop.c
++++ b/HOP/para_hop.c
+@@ -24,6 +24,8 @@ http://www.sns.ias.edu/~eisenste/hop/hop_doc.html */
+ #include "para_kd.h"
+ #include "smooth.h"
+ 
++#include <copper-eval.h>
++
+ static int _debug;
+ int nthreads,*start_index,num_particles,*local_num_p, *local_buf_size;
+ float **samples_set, **median_seg, **local_median_seg;
+@@ -108,6 +110,18 @@ int main(int argc, char *argv[])
+ 	strcpy(achFile,"output_hop");
+ 	inputfile = NULL;
+         double t1, t2,timing_io_read, total_time, timing[NUM_STAGES];
++
++        if (copper_eval_init()) {
++          perror("copper_eval_init");
++          exit(1);
++        }
++        unsigned long jobs = 400;
++        const char* env_jobs = getenv("JOBS");
++        if (env_jobs != NULL) {
++          jobs = atoi(env_jobs);
++        }
++        unsigned long job;
++        for (job = 0; job < jobs; job++) {
+ 	
+         for (j=0;j<3;++j) fPeriod[j] = 1.0;
+ 	nMerge = 4;
+@@ -214,6 +228,7 @@ if (pid==0)
+                 kd->bnd.fMax[j]=local_bnd[i].fMax[j];
+             }
+         }
++        fclose(fp);
+ }/*end of parallelization*/	
+ 
+ seconds(t1);
+@@ -343,6 +358,11 @@ printf("number of groups = %d\n", smx->nGroups);
+ 	kdFinish(kd);
+ 	INFORM("All Done!");
+ */
++    copper_eval_iteration(job, 0);
++    }
++    if (copper_eval_finish()) {
++      perror("copper_eval_finish");
++    }
+ 	return 0;
+ }
+ 
+diff --git a/KMeans/Makefile b/KMeans/Makefile
+index a27f287..5abed63 100644
+--- a/KMeans/Makefile
++++ b/KMeans/Makefile
+@@ -8,8 +8,8 @@ DFLAGS      =
+ 
+ OPTFLAGS    = -O2
+ INCFLAGS    =
+-CFLAGS      = $(OPTFLAGS) $(DFLAGS) $(INCFLAGS)
+-LDFLAGS     = -lm
++CFLAGS      = $(OPTFLAGS) $(DFLAGS) $(INCFLAGS) $(shell pkg-config --cflags copper-eval)
++LDFLAGS     = -lm $(shell pkg-config --libs --static copper-eval)
+ 
+ H_FILES     = fuzzy_kmeans.h
+ 
+diff --git a/KMeans/example.c b/KMeans/example.c
+index 76253ae..6876126 100644
+--- a/KMeans/example.c
++++ b/KMeans/example.c
+@@ -30,6 +30,7 @@
+ #include <unistd.h>
+ #include <fcntl.h>
+ #include <omp.h>
++#include <copper-eval.h>
+ 
+ #include "fuzzy_kmeans.h"
+ 
+@@ -140,6 +141,18 @@ int main(int argc, char **argv) {
+ 
+     if (filename == 0) usage(argv[0]);
+ 
++    if (copper_eval_init()) {
++      perror("copper_eval_init");
++      exit(1);
++    }
++    unsigned long jobs = 100;
++    const char* env_jobs = getenv("JOBS");
++    if (env_jobs != NULL) {
++      jobs = atoi(env_jobs);
++    }
++    unsigned long job;
++    for (job = 0; job < jobs; job++) {
++
+ /*
+     if (perform_fuzzy_kmeans == 1)
+         is_perform_valid = 1;
+@@ -393,6 +406,12 @@ int main(int argc, char **argv) {
+     free(cluster_centres);
+     free(buf);
+ 
++    copper_eval_iteration(job, 0);
++    }
++    if (copper_eval_finish()) {
++      perror("copper_eval_finish");
++    }
++
+     return(0);
+ }
+ 
+diff --git a/PLSA/Makefile b/PLSA/Makefile
+index f61b2c8..edbed16 100644
+--- a/PLSA/Makefile
++++ b/PLSA/Makefile
+@@ -2,7 +2,7 @@
+ CCOMPILE   = gcc
+ CPPCOMPILE = g++
+ 
+-COMPILEOPTION = -g -Wno-write-strings
++COMPILEOPTION = -g -Wno-write-strings -fopenmp
+ INCLUDEDIR =
+ LIBHOME = 
+ LINK = $(CPPCOMPILE)
+@@ -13,7 +13,7 @@ OBJS = wtime.o ParseFile.o ParallelSWAlgorithm.o ParaSWProcessorSet.o ParaSWProb
+ OUTPUT = ./parasw
+ ################OPTION END################
+ $(OUTPUT):$(OBJS)
+-	$(LINK) $(OBJS) $(LINKOPTION) -o $(OUTPUT) $(LIBS) $(LIBDIRS) 
++	$(LINK) $(OBJS) $(LINKOPTION) -o $(OUTPUT) $(LIBS) $(LIBDIRS) -fopenmp
+ 
+ clean: 
+ 	rm -f $(OBJS) $(OUTPUT)
+diff --git a/SEMPHY/programs/rate4site/rate4siteOptions.cpp b/SEMPHY/programs/rate4site/rate4siteOptions.cpp
+index 1ea03bf..cf127a7 100644
+--- a/SEMPHY/programs/rate4site/rate4siteOptions.cpp
++++ b/SEMPHY/programs/rate4site/rate4siteOptions.cpp
+@@ -3,6 +3,7 @@
+ #include "rate4siteOptions.h"
+ #include "errorMsg.h"
+ #include <iostream>
++#include <unistd.h>
+ using namespace std;
+ 
+ rate4siteOptions::rate4siteOptions(int& argc, char *argv[]):
+diff --git a/SNP/pnl.snp/snp/Makefile b/SNP/pnl.snp/snp/Makefile
+index 69ee033..76ec5b0 100644
+--- a/SNP/pnl.snp/snp/Makefile
++++ b/SNP/pnl.snp/snp/Makefile
+@@ -1,5 +1,5 @@
+ # CXX = icpc -openmp
+-CXX = g++ -fopenmp
++CXX = g++ -fopenmp -fpermissive
+ 
+ all: snp
+ 
+diff --git a/SVM-RFE/Makefile b/SVM-RFE/Makefile
+index 90c8fde..f411de7 100644
+--- a/SVM-RFE/Makefile
++++ b/SVM-RFE/Makefile
+@@ -2,14 +2,14 @@
+ ################OPTION###################
+ CCOMPILE = gcc
+ CPPCOMPILE = g++
+-COMPILEOPTION = -g -fopenmp -D_OPT
++COMPILEOPTION = -g -fopenmp -D_OPT $(shell pkg-config --cflags copper-eval)
+ # INCLUDEDIR = -I/opt/intel/vtune/analyzer/include -I/opt/intel/mkl721/include
+ INCLUDEDIR = -I.
+ LIBHOME = 
+ LINK = g++
+ LINKOPTION = -g -fopenmp -o ./svm_mkl
+ LIBS =  /opt/intel/mkl721/lib/32/libmkl_ia32.a
+-LIBS =  
++LIBS = $(shell pkg-config --libs --static copper-eval)
+ LIBDIRS =  
+ OBJS = wtime.o svm.o svm_rfe.o svm_rfe_test.o
+ OUTPUT = ./svm_mkl
+diff --git a/SVM-RFE/svm_rfe.cpp b/SVM-RFE/svm_rfe.cpp
+index 272a216..9349ec7 100644
+--- a/SVM-RFE/svm_rfe.cpp
++++ b/SVM-RFE/svm_rfe.cpp
+@@ -7,6 +7,7 @@
+ #include <math.h>
+ #include <string>
+ #include <iostream>
++#include <copper-eval.h>
+ 
+ #include "svm_rfe.h"
+ 
+@@ -1343,6 +1344,7 @@ bool Svm_RFE::svm_rfe_engine(struct svm_problem prob,struct svm_parameter param,
+ 	}	
+ 	else
+ 	{
++		int count = 0;
+ 		while (nIteration --)	// Test use, eric, 5/14/2004
+ 		{	
+ 			int temp= weights.size();		
+@@ -1401,6 +1403,7 @@ bool Svm_RFE::svm_rfe_engine(struct svm_problem prob,struct svm_parameter param,
+ 			end_t = clock();
+ 			total += (double)(end_t-start_t)/CLOCKS_PER_SEC;
+ #endif
++			copper_eval_iteration(count++, 0);
+ 		}
+ 	}	
+ 	
+diff --git a/SVM-RFE/svm_rfe_test.cpp b/SVM-RFE/svm_rfe_test.cpp
+index da0bbae..f13fe62 100644
+--- a/SVM-RFE/svm_rfe_test.cpp
++++ b/SVM-RFE/svm_rfe_test.cpp
+@@ -5,6 +5,7 @@
+ #include <iostream>
+ #include <fstream>
+ #include "time.h"
++#include <copper-eval.h>
+ 
+ #include "svm_rfe.h"
+ #define Malloc(type,n) (type *)malloc((n)*sizeof(type))
+@@ -49,6 +50,11 @@ int cmdline_parse(int argc, char* argv[]);
+ 
+ int main(int argc, char* argv[])
+ {
++	if (copper_eval_init()) {
++		perror("copper_eval_init");
++		exit(1);
++	}
++
+ 	int i, j;	
+ 	clock_t start0, end0;
+ 	double sum0;	
+@@ -109,6 +115,10 @@ int main(int argc, char* argv[])
+ 	}
+ 	fprank.close();
+ 
++	if (copper_eval_finish()) {
++		perror("copper_eval_finish");
++	}
++
+ 	return 0;
+ }
+ 
+diff --git a/ScalParC/Makefile b/ScalParC/Makefile
+index a539bfd..7a54452 100644
+--- a/ScalParC/Makefile
++++ b/ScalParC/Makefile
+@@ -1,12 +1,12 @@
+ # CC = icc -openmp
+ CC = gcc -fopenmp
+ 
+-CFLAGS = -g $(INCLUDE_DIR) 
++CFLAGS = -g $(INCLUDE_DIR) $(shell pkg-config --cflags copper-eval)
+ LINKFLAGS = 
+ 
+ INCLUDE_DIR = -I. 
+ 
+-LIBS = -lm
++LIBS = -lm $(shell pkg-config --libs --static copper-eval)
+ TARGET = scalparc
+ OBJ  = drive.o getdata.o parsort.o parclass.o
+ 
+diff --git a/ScalParC/drive.c b/ScalParC/drive.c
+index 7678d5a..56312f9 100644
+--- a/ScalParC/drive.c
++++ b/ScalParC/drive.c
+@@ -3,6 +3,7 @@
+ #include <string.h>
+ #include <math.h>
+ #include <time.h>
++#include <copper-eval.h>
+ 
+ #define MAIN_FILE
+ #include "pclass.h"
+@@ -17,6 +18,18 @@ struct timeval tp;
+   
+ int main(int argc, char *argv[])
+ {
++  if (copper_eval_init()) {
++    perror("copper_eval_init");
++    exit(1);
++  }
++  unsigned long jobs = 400;
++  const char* env_jobs = getenv("JOBS");
++  if (env_jobs != NULL) {
++    jobs = atoi(env_jobs);
++  }
++  unsigned long job;
++  for (job = 0; job < jobs; job++) {
++
+   FILE *fp_data;
+   char datafile[FILE_NAME_LEN], file_name[FILE_NAME_LEN];
+   int i,j,k;
+@@ -97,4 +110,9 @@ int main(int argc, char *argv[])
+   printf("Total execution time with %d processoers: %f\n",nthreads, te-ts); 
+   printf("I/O time = %f\n", max);
+   printf("Computation time =%f\n", te-ts - max);
++  copper_eval_iteration(job, 0);
++  }
++  if (copper_eval_finish()) {
++    perror("copper_eval_finish");
++  }
+ }
+diff --git a/Utility_Mining/para_tran_utility/Makefile b/Utility_Mining/para_tran_utility/Makefile
+index 9091e92..0390f28 100644
+--- a/Utility_Mining/para_tran_utility/Makefile
++++ b/Utility_Mining/para_tran_utility/Makefile
+@@ -1,11 +1,11 @@
+ # CXX  =  icpc -openmp
+ CXX  =  g++ -fopenmp
+ 
+-CFLAGS  = -O2 -g
++CFLAGS  = -O2 -g $(shell pkg-config --cflags copper-eval)
+ OBJS	= ListItemset.o
+ OBJS2   = Database.o Itemset.o HashTree.o
+ OPTS	= -DBALT -DOPTIMAL 
+-LIBS = -lm 
++LIBS = -lm $(shell pkg-config --libs --static copper-eval)
+ 
+ TARGET  = utility_mine 
+ 
+diff --git a/Utility_Mining/para_tran_utility/utility.cc b/Utility_Mining/para_tran_utility/utility.cc
+index 6173ce2..6bb723e 100644
+--- a/Utility_Mining/para_tran_utility/utility.cc
++++ b/Utility_Mining/para_tran_utility/utility.cc
+@@ -15,6 +15,7 @@
+ #include <unistd.h>
+ #include <memory.h>
+ #include <fcntl.h>
++#include <copper-eval.h>
+ 
+ #include "Itemset.h"
+ #include "ListItemset.h"
+@@ -530,6 +531,18 @@ void clean_up(){
+ 
+ int main(int argc, char **argv)
+ {
++    if (copper_eval_init()) {
++      perror("copper_eval_init");
++      exit(1);
++    }
++    unsigned long jobs = 100;
++    const char* env_jobs = getenv("JOBS");
++    if (env_jobs != NULL) {
++      jobs = atoi(env_jobs);
++    }
++    unsigned long job;
++    for (job = 0; job < jobs; job++) {
++
+     int profit_file;
+     summary = fopen("out", "a+");
+     int lb, ub, pid, blk,indx, i, k, j, m, n, *buf, numitem, tid;
+@@ -682,6 +695,12 @@ seconds(t3);
+ //     close_DCB(DCB);
+      clean_up();
+ 
++     copper_eval_iteration(job, 0);
++     }
++     if (copper_eval_finish()) {
++        perror("copper_eval_finish");
++     }
++
+      return(0);
+ }
+ 
+diff --git a/compilenotes.txt b/compilenotes.txt
+index ef0e403..3695ba8 100644
+--- a/compilenotes.txt
++++ b/compilenotes.txt
+@@ -107,10 +107,10 @@
+ 
+ -- SNP --
+ 	cd SNP/pnl.snp/PNL 
+-	run commands "./configure CC=gcc CXX=g++"
++	run commands "./configure CC=gcc CXX=g++ CXXFLAGS=-fpermissive"
+ 	run "make"
+        	cd ../snp 
+-	edit Makefile to set CXX to g++ and run command "make"
++	edit Makefile to append "-fpermissive" to CXX and run command "make"
+ 	This will produce executable named "snp".
+ 
+ 	For icc 7.1 and 8.1

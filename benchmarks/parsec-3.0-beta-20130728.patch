@@ -1,0 +1,1251 @@
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 00000000..ac5735b5
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,5 @@
++*.~
++*.log
++*.out
++**/inst/*
++**/obj/*
+diff --git a/config/gcc-hooks.bldconf b/config/gcc-hooks.bldconf
+index 9d49cc8b..1572905f 100644
+--- a/config/gcc-hooks.bldconf
++++ b/config/gcc-hooks.bldconf
+@@ -9,10 +9,10 @@
+ source ${PARSECDIR}/config/gcc.bldconf
+ 
+ # Enable PARSEC hooks
+-CFLAGS="${CFLAGS} -DENABLE_PARSEC_HOOKS -I${PARSECDIR}/pkgs/libs/hooks/inst/${PARSECPLAT}/include"
+-CXXFLAGS="${CXXFLAGS} -DENABLE_PARSEC_HOOKS -I${PARSECDIR}/pkgs/libs/hooks/inst/${PARSECPLAT}/include"
++CFLAGS="${CFLAGS} -DENABLE_PARSEC_HOOKS -I${PARSECDIR}/pkgs/libs/hooks/inst/${PARSECPLAT}/include `pkg-config --cflags copper-eval` -O2"
++CXXFLAGS="${CXXFLAGS} -DENABLE_PARSEC_HOOKS -I${PARSECDIR}/pkgs/libs/hooks/inst/${PARSECPLAT}/include `pkg-config --cflags copper-eval` -O2 -std=c++98"
+ LDFLAGS="${LDFLAGS} -L${PARSECDIR}/pkgs/libs/hooks/inst/${PARSECPLAT}/lib"
+-LIBS="${LIBS} -lhooks"
++LIBS="${LIBS} -lhooks `pkg-config --libs --static copper-eval` -lstdc++"
+ 
+ # Add directory with hooks library to library search path
+ if [ -z "${LD_LIBRARY_PATH}" ]; then
+diff --git a/pkgs/apps/blackscholes/src/blackscholes.c b/pkgs/apps/blackscholes/src/blackscholes.c
+index 559628d0..49dea87d 100644
+--- a/pkgs/apps/blackscholes/src/blackscholes.c
++++ b/pkgs/apps/blackscholes/src/blackscholes.c
+@@ -16,6 +16,8 @@
+ #include <hooks.h>
+ #endif
+ 
++#include <copper-eval.h>
++
+ // Multi-threaded pthreads header
+ #ifdef ENABLE_THREADS
+ // Add the following line so that icc 9.0 is compatible with pthread lib.
+@@ -49,7 +51,7 @@ using namespace tbb;
+ //Precision to use for calculations
+ #define fptype float
+ 
+-#define NUM_RUNS 100
++#define NUM_RUNS 400
+ 
+ typedef struct OptionData_ {
+         fptype s;          // spot price
+@@ -282,7 +284,7 @@ int bs_thread(void *tid_ptr) {
+     int start = tid * (numOptions / nThreads);
+     int end = start + (numOptions / nThreads);
+ 
+-    for (j=0; j<NUM_RUNS; j++) {
++    //for (j=0; j<NUM_RUNS; j++) {
+ #ifdef ENABLE_OPENMP
+ #pragma omp parallel for private(i, price, priceDelta)
+         for (i=0; i<numOptions; i++) {
+@@ -306,7 +308,7 @@ int bs_thread(void *tid_ptr) {
+             }
+ #endif
+         }
+-    }
++    //}
+ 
+     return 0;
+ }
+@@ -321,6 +323,11 @@ int main (int argc, char **argv)
+     int * buffer2;
+     int rv;
+ 
++    if (copper_eval_init()) {
++      perror("copper_eval_init");
++      exit(1);
++    }
++
+ #ifdef PARSEC_VERSION
+ #define __PARSEC_STRING(x) #x
+ #define __PARSEC_XSTRING(x) __PARSEC_STRING(x)
+@@ -434,15 +441,23 @@ int main (int argc, char **argv)
+     free(threads);
+     free(nums);
+ #else
+-    int *tids;
+-    tids = (int *) malloc (nThreads * sizeof(int));
+-
+-    for(i=0; i<nThreads; i++) {
+-        tids[i]=i;
+-        CREATE_WITH_ARG(bs_thread, &tids[i]);
++    int j;
++    for (j=0; j<NUM_RUNS; j++) {
++        copper_eval_iteration(j, 0);
++
++        // handle the pthreads ourselves to work around bug --CKI 2014-10-07
++        int *tids;
++        tids = (int *) malloc (nThreads * sizeof(int));
++        pthread_t threads[nThreads];
++        for(i=0; i < nThreads; i++) {
++            tids[i] = i;
++            pthread_create(&threads[i], NULL, (void *(*)(void *)) bs_thread, (void *) &tids[i]);
++        }
++        for (i = 0; i < nThreads; i++) {
++            pthread_join(threads[i], NULL);
++        }
++        free(tids);
+     }
+-    WAIT_FOR_END(nThreads);
+-    free(tids);
+ #endif //WIN32
+ #else //ENABLE_THREADS
+ #ifdef ENABLE_OPENMP
+@@ -505,6 +520,10 @@ int main (int argc, char **argv)
+     __parsec_bench_end();
+ #endif
+ 
++    if (copper_eval_finish()) {
++      perror("copper_eval_finish");
++    }
++
+     return 0;
+ }
+ 
+diff --git a/pkgs/apps/bodytrack/src/TrackingBenchmark/main.cpp b/pkgs/apps/bodytrack/src/TrackingBenchmark/main.cpp
+index b25b18ae..0064b209 100644
+--- a/pkgs/apps/bodytrack/src/TrackingBenchmark/main.cpp
++++ b/pkgs/apps/bodytrack/src/TrackingBenchmark/main.cpp
+@@ -65,6 +65,7 @@ using namespace tbb;
+ #include "TrackingModel.h"
+ #include "system.h"
+ 
++#include <copper-eval.h>
+ 
+ using namespace std;
+ 
+@@ -190,7 +191,8 @@ int mainOMP(string path, int cameras, int frames, int particles, int layers, int
+         __parsec_roi_begin();
+ #endif
+ 	for(int i = 0; i < frames; i++)														//process each set of frames
+-	{	cout << "Processing frame " << i << endl;
++	{
++		cout << "Processing frame " << i << endl;
+ 		if(!pf.Update((float)i))														//Run particle filter step
+ 		{	cout << "Error loading observation data" << endl;
+ 			return 0;
+@@ -251,7 +253,9 @@ int mainPthreads(string path, int cameras, int frames, int particles, int layers
+         __parsec_roi_begin();
+ #endif
+ 	for(int i = 0; i < frames; i++)														//process each set of frames
+-	{	cout << "Processing frame " << i << endl;
++	{
++		copper_eval_iteration(i, 0);
++		cout << "Processing frame " << i << endl;
+ 		if(!pf.Update((float)i))														//Run particle filter step
+ 		{	cout << "Error loading observation data" << endl;
+ 			workers.JoinAll();
+@@ -348,7 +352,8 @@ int mainSingleThread(string path, int cameras, int frames, int particles, int la
+         __parsec_roi_begin();
+ #endif
+ 	for(int i = 0; i < frames; i++)														//process each set of frames
+-	{	cout << "Processing frame " << i << endl;
++	{
++		cout << "Processing frame " << i << endl;
+ 		if(!pf.Update((float)i))														//Run particle filter step
+ 		{	cout << "Error loading observation data" << endl;
+ 			return 0;
+@@ -371,6 +376,11 @@ int main(int argc, char **argv)
+ 	bool OutputBMP;
+ 	int cameras, frames, particles, layers, threads, threadModel;								//process command line parameters to get path, cameras, and frames
+ 
++	if (copper_eval_init()) {
++		perror("copper_eval_init");
++		exit(1);
++	}
++
+ #ifdef PARSEC_VERSION
+ #define __PARSEC_STRING(x) #x
+ #define __PARSEC_XSTRING(x) __PARSEC_STRING(x)
+@@ -449,6 +459,10 @@ int main(int argc, char **argv)
+ 			break;
+ 	}
+ 
++	if (copper_eval_finish()) {
++		perror("copper_eval_finish");
++	}
++
+ #if defined(ENABLE_PARSEC_HOOKS)
+         __parsec_bench_end();
+ #endif
+diff --git a/pkgs/apps/facesim/src/Benchmarks/facesim/main.cpp b/pkgs/apps/facesim/src/Benchmarks/facesim/main.cpp
+index 1c4c8d06..8ed1b33c 100644
+--- a/pkgs/apps/facesim/src/Benchmarks/facesim/main.cpp
++++ b/pkgs/apps/facesim/src/Benchmarks/facesim/main.cpp
+@@ -14,6 +14,8 @@
+ #include <hooks.h>
+ #endif
+ 
++#include <copper-eval.h>
++
+ using namespace PhysBAM;
+ 
+ #ifdef ENABLE_PTHREADS
+@@ -82,6 +84,11 @@ int main (int argc, char* argv[])
+ 		exit (1);
+ 	}
+ 
++	if (copper_eval_init()) {
++		perror("copper_eval_init");
++		exit(1);
++	}
++
+ 	THREAD_DIVISION_PARAMETERS<float>& parameters = *THREAD_DIVISION_PARAMETERS<float>::Singleton();
+ 	parameters.grid_divisions_3d = VECTOR_3D<int> (5, 5, 5);
+ 
+@@ -91,6 +98,10 @@ int main (int argc, char* argv[])
+ 
+ 	delete (THREAD_POOL::Singleton());
+ 
++	if (copper_eval_finish()) {
++		perror("copper_eval_finish");
++	}
++
+ #ifdef ENABLE_PARSEC_HOOKS
+ 	__parsec_bench_end();
+ #endif
+diff --git a/pkgs/apps/facesim/src/Public_Library/Solids_And_Fluids/SOLIDS_FLUIDS_DRIVER.cpp b/pkgs/apps/facesim/src/Public_Library/Solids_And_Fluids/SOLIDS_FLUIDS_DRIVER.cpp
+index 3179c4c7..b900567c 100644
+--- a/pkgs/apps/facesim/src/Public_Library/Solids_And_Fluids/SOLIDS_FLUIDS_DRIVER.cpp
++++ b/pkgs/apps/facesim/src/Public_Library/Solids_And_Fluids/SOLIDS_FLUIDS_DRIVER.cpp
+@@ -9,6 +9,9 @@
+ #ifdef ENABLE_PARSEC_HOOKS
+ #include <hooks.h>
+ #endif
++
++#include <copper-eval.h>
++
+ using namespace PhysBAM;
+ //#####################################################################
+ // Function Execute_Main_Program
+@@ -58,6 +61,7 @@ Simulate_To_Frame (const int frame_input)
+ 	while (current_frame < frame_input)
+ 	{
+ 		LOG::Push_Scope ("FRAME", "Frame %d", current_frame + 1);
++		copper_eval_iteration(current_frame, 0);
+ 		Preprocess_Frame (current_frame + 1);
+ 		Advance_To_Target_Time (Time_At_Frame (current_frame + 1));
+ 		Postprocess_Frame (++current_frame);
+diff --git a/pkgs/apps/ferret/src/benchmark/ferret-pthreads.c b/pkgs/apps/ferret/src/benchmark/ferret-pthreads.c
+index 06b3d9c5..dc542478 100644
+--- a/pkgs/apps/ferret/src/benchmark/ferret-pthreads.c
++++ b/pkgs/apps/ferret/src/benchmark/ferret-pthreads.c
+@@ -37,6 +37,8 @@ Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ #include <hooks.h>
+ #endif
+ 
++#include <copper-eval.h>
++
+ #define DEFAULT_DEPTH	25
+ #define MAXR	100
+ #define IMAGE_DIM	14
+@@ -372,6 +374,7 @@ void *t_rank (void *dummy)
+ 	return NULL;
+ }
+ 
++static int counter = 0;
+ void *t_out (void *dummy)
+ {
+ 	struct rank_data *rank;
+@@ -399,9 +402,12 @@ void *t_out (void *dummy)
+ 		free(rank->name);
+ 		free(rank);
+ 
++		int old_counter = __sync_fetch_and_add(&counter, 1);
++		copper_eval_iteration(cnt_dequeue, 0);
++
+ 		cnt_dequeue++;
+ 		
+-		fprintf(stderr, "(%d,%d)\n", cnt_enqueue, cnt_dequeue);
++		// fprintf(stderr, "(%d,%d)\n", cnt_enqueue, cnt_dequeue);
+ 	}
+ 
+ 	assert(cnt_enqueue == cnt_dequeue);
+@@ -428,6 +434,11 @@ int main (int argc, char *argv[])
+ 
+ 	int ret, i;
+ 
++	if (copper_eval_init()) {
++		perror("copper_eval_init");
++		exit(1);
++	}
++
+ #ifdef PARSEC_VERSION
+ #define __PARSEC_STRING(x) #x
+ #define __PARSEC_XSTRING(x) __PARSEC_STRING(x)
+@@ -596,6 +607,10 @@ int main (int argc, char *argv[])
+ 
+ 	fclose(fout);
+ 
++	if (copper_eval_finish()) {
++		perror("copper_eval_finish");
++	}
++
+ #ifdef ENABLE_PARSEC_HOOKS
+ 	__parsec_bench_end();
+ #endif
+diff --git a/pkgs/apps/fluidanimate/src/pthreads.cpp b/pkgs/apps/fluidanimate/src/pthreads.cpp
+index e95b187b..592e1634 100644
+--- a/pkgs/apps/fluidanimate/src/pthreads.cpp
++++ b/pkgs/apps/fluidanimate/src/pthreads.cpp
+@@ -16,6 +16,7 @@
+ #include <pthread.h>
+ #include <assert.h>
+ #include <float.h>
++#include <copper-eval.h>
+ 
+ #include "fluid.hpp"
+ #include "cellpool.hpp"
+@@ -1150,6 +1151,7 @@ void AdvanceFrameMT(int tid)
+ #endif
+ }
+ 
++static int counter = 0;
+ #ifndef ENABLE_VISUALIZATION
+ void *AdvanceFramesMT(void *args)
+ {
+@@ -1157,6 +1159,8 @@ void *AdvanceFramesMT(void *args)
+ 
+   for(int i = 0; i < targs->frames; ++i) {
+     AdvanceFrameMT(targs->tid);
++    int old_counter = __sync_fetch_and_add(&counter, 1);
++    copper_eval_iteration(old_counter, 0);
+   }
+   
+   return NULL;
+@@ -1178,6 +1182,8 @@ void *AdvanceFramesMT(void *args)
+     AdvanceFrameMT(targs->tid);
+     pthread_barrier_wait(&visualization_barrier);
+     //Phase 2: Visualize, worker threads blocked
++    int old_counter = __sync_fetch_and_add(&counter, 1);
++    copper_eval_iteration(old_counter, 0);
+   }
+ 
+   return NULL;
+@@ -1198,6 +1204,11 @@ void AdvanceFrameVisualization()
+ 
+ int main(int argc, char *argv[])
+ {
++  if (copper_eval_init()) {
++    perror("copper_eval_init");
++    exit(1);
++  }
++
+ #ifdef PARSEC_VERSION
+ #define __PARSEC_STRING(x) #x
+ #define __PARSEC_XSTRING(x) __PARSEC_STRING(x)
+@@ -1271,6 +1282,9 @@ int main(int argc, char *argv[])
+   __parsec_bench_end();
+ #endif
+ 
++  if (copper_eval_finish()) {
++    perror("copper_eval_finish");
++  }
+   return 0;
+ }
+ 
+diff --git a/pkgs/apps/freqmine/src/fp_tree.cpp b/pkgs/apps/freqmine/src/fp_tree.cpp
+index 9997e048..8cc68a2d 100644
+--- a/pkgs/apps/freqmine/src/fp_tree.cpp
++++ b/pkgs/apps/freqmine/src/fp_tree.cpp
+@@ -41,6 +41,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
+ #include "buffer.h"
+ #include "common.h"
+ #include "wtime.h"
++#include <copper-eval.h>
+ 
+ #ifdef _OPENMP
+ #include <omp.h>
+@@ -1287,6 +1288,7 @@ void FP_tree::release_node_array_before_mining(int sequence, int thread, int wor
+ 
+ }
+ 
++static int counter = 0;
+ int FP_tree::FP_growth_first(FSout* fout)
+ {
+ 	int sequence;
+@@ -1418,6 +1420,8 @@ int FP_tree::FP_growth_first(FSout* fout)
+ 				local_fp_tree_buf->freebuf(fptree->MR_tree, fptree->MC_tree, fptree->MB_tree);
+ 			}else{             
+ 				fptree->FP_growth(thread, fout);
++				int old_counter = __sync_fetch_and_add(&counter, 1);
++				copper_eval_iteration(old_counter, 0);
+ 				local_list->top = listlen-1;
+ 			}
+ 			release_node_array_after_mining(sequence, thread, workingthread);
+diff --git a/pkgs/apps/freqmine/src/fpmax.cpp b/pkgs/apps/freqmine/src/fpmax.cpp
+index 3330fc2f..1ca0aea1 100644
+--- a/pkgs/apps/freqmine/src/fpmax.cpp
++++ b/pkgs/apps/freqmine/src/fpmax.cpp
+@@ -49,6 +49,7 @@ THE POSSIBILITY OF SUCH DAMAGE.
+ #include <time.h>
+ #include <sys/time.h>
+ #include "common.h"
++#include <copper-eval.h>
+ 
+ using namespace std;
+ 
+@@ -108,6 +109,10 @@ int main(int argc, char **argv)
+ 	int i;
+ 	FP_tree* fptree;
+ 
++	if (copper_eval_init()) {
++		perror("copper_eval_init");
++		exit(1);
++	}
+ #ifdef PARSEC_VERSION
+ #define __PARSEC_STRING(x) #x
+ #define __PARSEC_XSTRING(x) __PARSEC_STRING(x)
+@@ -200,6 +205,9 @@ int main(int argc, char **argv)
+ 							
+ 	wtime(&tend);
+ 	printf ("the data preparation cost %f seconds, the FPgrowth cost %f seconds\n", tdatap - tstart, tend - tdatap);
++	if (copper_eval_finish()) {
++		perror("copper_eval_finish");
++	}
+ 
+ #ifdef ENABLE_PARSEC_HOOKS
+ 	__parsec_bench_end();
+diff --git a/pkgs/apps/raytrace/src/MiniView/rtview.cxx b/pkgs/apps/raytrace/src/MiniView/rtview.cxx
+index 635fe5a7..39170885 100644
+--- a/pkgs/apps/raytrace/src/MiniView/rtview.cxx
++++ b/pkgs/apps/raytrace/src/MiniView/rtview.cxx
+@@ -10,6 +10,7 @@
+ #include <string>
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <copper-eval.h>
+ 
+ #ifdef ENABLE_PARSEC_HOOKS
+ #include <hooks.h>
+@@ -365,6 +366,11 @@ int main(int argc, char* argv[])
+ 
+   parseCommandLine(argc, argv);
+ 
++  if (copper_eval_init()) {
++    perror("copper_eval_init");
++    exit(1);
++  }
++
+   if (glDisplay) {
+     /* initialize glut */
+     glutInit(&argc, argv);
+@@ -485,11 +491,17 @@ int main(int argc, char* argv[])
+     int frame = 0;
+     do {
+       render();
++      copper_eval_iteration(frame, 0);
+       frame++;
+     } while(!(__builtin_expect(framesToRender > 0,0) && frame >= framesToRender));
+ #ifdef ENABLE_PARSEC_HOOKS
+     __parsec_roi_end();
+ #endif
++
++  if (copper_eval_finish()) {
++    perror("copper_eval_finish");
++  }
++
+     cout << "Done" << endl << flush;
+   }
+ 
+diff --git a/pkgs/apps/swaptions/parsec/gcc.bldconf b/pkgs/apps/swaptions/parsec/gcc.bldconf
+index b76144db..c7d9c4ac 100644
+--- a/pkgs/apps/swaptions/parsec/gcc.bldconf
++++ b/pkgs/apps/swaptions/parsec/gcc.bldconf
+@@ -3,5 +3,5 @@
+ # gcc.bldconf - configuration file for PARSEC
+ 
+ # Default parallelization is pthreads
+-source ${PARSECDIR}/pkgs/apps/swaptions/parsec/gcc-tbb.bldconf
++source ${PARSECDIR}/pkgs/apps/swaptions/parsec/gcc-pthreads.bldconf
+ 
+diff --git a/pkgs/apps/swaptions/src/HJM_Securities.cpp b/pkgs/apps/swaptions/src/HJM_Securities.cpp
+index c77552a1..d758c77d 100644
+--- a/pkgs/apps/swaptions/src/HJM_Securities.cpp
++++ b/pkgs/apps/swaptions/src/HJM_Securities.cpp
+@@ -8,6 +8,7 @@
+ #include <stdlib.h>
+ #include <math.h>
+ #include <iostream>
++#include <copper-eval.h>
+ 
+ #include "nr_routines.h"
+ #include "HJM.h"
+@@ -80,6 +81,7 @@ struct Worker {
+ #endif //TBB_VERSION
+ 
+ 
++static int counter = 0;
+ void * worker(void *arg){
+   int tid = *((int *)arg);
+   FTYPE pdSwaptionPrice[2];
+@@ -110,6 +112,8 @@ void * worker(void *arg){
+      assert(iSuccess == 1);
+      swaptions[i].dSimSwaptionMeanPrice = pdSwaptionPrice[0];
+      swaptions[i].dSimSwaptionStdError = pdSwaptionPrice[1];
++     int old_counter = __sync_fetch_and_add(&counter, 1);
++     copper_eval_iteration(old_counter, swaptions[i].dSimSwaptionStdError);
+    }
+ 
+    return NULL;
+@@ -177,6 +181,11 @@ int main(int argc, char *argv[])
+         printf("Number of Simulations: %d,  Number of threads: %d Number of swaptions: %d\n", NUM_TRIALS, nThreads, nSwaptions);
+         swaption_seed = (long)(2147483647L * RanUnif(&seed));
+ 
++        if (copper_eval_init()) {
++          perror("copper_eval_init");
++          exit(1);
++        }
++
+ #ifdef ENABLE_THREADS
+ 
+ #ifdef TBB_VERSION
+@@ -323,6 +332,9 @@ int main(int argc, char *argv[])
+ 	  free_dmatrix(swaptions[i].ppdFactors, 0, swaptions[i].iFactors-1, 0, swaptions[i].iN-2);
+         }
+ 
++  if (copper_eval_finish()) {
++    perror("copper_eval_finish");
++  }
+ 
+ #ifdef TBB_VERSION
+ 	memory_parm.deallocate(swaptions, sizeof(parm));
+diff --git a/pkgs/apps/vips/src/libvips/iofuncs/threadpool.c b/pkgs/apps/vips/src/libvips/iofuncs/threadpool.c
+index ed6ff5b7..0d1e0e74 100644
+--- a/pkgs/apps/vips/src/libvips/iofuncs/threadpool.c
++++ b/pkgs/apps/vips/src/libvips/iofuncs/threadpool.c
+@@ -61,6 +61,8 @@
+ #include <vips/thread.h>
+ #include <vips/debug.h>
+ 
++#include <copper-eval.h>
++
+ #ifdef OS_WIN32
+ #include <windows.h>
+ #endif /*OS_WIN32*/
+@@ -527,6 +529,7 @@ vips_thread_work_unit( VipsThread *thr )
+ }
+ 
+ #ifdef HAVE_THREADS
++static int counter = 0;
+ /* What runs as a thread ... loop, waiting to be told to do stuff.
+  */
+ static void *
+@@ -546,6 +549,8 @@ vips_thread_main_loop( void *a )
+ 
+ 		if( pool->stop || pool->error )
+ 			break;
++		int old_counter = __sync_fetch_and_add(&counter, 1);
++		copper_eval_iteration(old_counter, 0);
+ 	} 
+ 
+ 	/* We are exiting: tell the main thread. 
+diff --git a/pkgs/apps/vips/src/tools/iofuncs/vips.c b/pkgs/apps/vips/src/tools/iofuncs/vips.c
+index 5dd7bd86..aa39ac41 100644
+--- a/pkgs/apps/vips/src/tools/iofuncs/vips.c
++++ b/pkgs/apps/vips/src/tools/iofuncs/vips.c
+@@ -76,6 +76,7 @@
+ #include <string.h>
+ #include <ctype.h>
+ #include <locale.h>
++#include <copper-eval.h>
+ 
+ #include <vips/vips.h>
+ 
+@@ -896,6 +897,11 @@ print_cppdefs( char *name )
+ int
+ main( int argc, char **argv )
+ {
++	if (copper_eval_init()) {
++		perror("copper_eval_init");
++		exit(1);
++	}
++
+ 	GOptionContext *context;
+ 	GError *error = NULL;
+ 	im_function *fn;
+@@ -1020,5 +1026,8 @@ main( int argc, char **argv )
+ 
+ 	im_close_plugins();
+ 
++	if (copper_eval_finish()) {
++		perror("copper_eval_finish");
++	}
+ 	return( 0 );
+ }
+diff --git a/pkgs/apps/x264/parsec/gcc-pthreads.bldconf b/pkgs/apps/x264/parsec/gcc-pthreads.bldconf
+index 7bf67b0d..8286f5ad 100644
+--- a/pkgs/apps/x264/parsec/gcc-pthreads.bldconf
++++ b/pkgs/apps/x264/parsec/gcc-pthreads.bldconf
+@@ -35,5 +35,5 @@ build_env="PATH=\"${PARSECDIR}/pkgs/tools/yasm/inst/${PARSECPLAT}/bin:${PATH}\""
+ build_inplace="TRUE"
+ 
+ # Arguments to pass to the configure script, if it exists
+-build_conf="--enable-pthread --extra-asflags=\"${ASFLAGS}\" --extra-cflags=\"${CFLAGS}\" --extra-ldflags=\"${LDFLAGS} ${LIBS}\""
++build_conf="--enable-pic --enable-pthread --extra-asflags=\"${ASFLAGS}\" --extra-cflags=\"${CFLAGS}\" --extra-ldflags=\"${LDFLAGS} ${LIBS}\""
+ 
+diff --git a/pkgs/apps/x264/src/x264.c b/pkgs/apps/x264/src/x264.c
+index 5b740e0c..ccb8df4a 100644
+--- a/pkgs/apps/x264/src/x264.c
++++ b/pkgs/apps/x264/src/x264.c
+@@ -47,6 +47,8 @@
+ #include <hooks.h>
+ #endif
+ 
++#include <copper-eval.h>
++
+ uint8_t *mux_buffer = NULL;
+ int mux_buffer_size = 0;
+ 
+@@ -85,7 +87,6 @@ static void Help( x264_param_t *defaults, int b_longhelp );
+ static int  Parse( int argc, char **argv, x264_param_t *param, cli_opt_t *opt );
+ static int  Encode( x264_param_t *param, cli_opt_t *opt );
+ 
+-
+ /****************************************************************************
+  * main:
+  ****************************************************************************/
+@@ -95,6 +96,11 @@ int main( int argc, char **argv )
+     cli_opt_t opt;
+     int ret;
+ 
++    if (copper_eval_init()) {
++      perror("copper_eval_init");
++      exit(1);
++    }
++
+ #ifdef PARSEC_VERSION
+ #define __PARSEC_STRING(x) #x
+ #define __PARSEC_XSTRING(x) __PARSEC_STRING(x)
+@@ -138,6 +144,10 @@ int main( int argc, char **argv )
+     __parsec_bench_end();
+ #endif
+ 
++    if (copper_eval_finish()) {
++      perror("copper_eval_finish");
++    }
++
+     return ret;
+ }
+ 
+@@ -873,6 +883,8 @@ static int  Encode( x264_param_t *param, cli_opt_t *opt )
+ 
+         i_frame++;
+ 
++        copper_eval_iteration(i_frame, i_file);
++
+         /* update status line (up to 1000 times per input file) */
+         if( opt->b_progress && i_frame % i_update_interval == 0 )
+         {
+diff --git a/pkgs/kernels/canneal/src/annealer_thread.cpp b/pkgs/kernels/canneal/src/annealer_thread.cpp
+index dfbb79c8..1ffa1f6e 100644
+--- a/pkgs/kernels/canneal/src/annealer_thread.cpp
++++ b/pkgs/kernels/canneal/src/annealer_thread.cpp
+@@ -40,6 +40,8 @@
+ #include <fstream>
+ #include "rng.h"
+ 
++#include <copper-eval.h>
++
+ using std::cout;
+ using std::endl;
+ 
+@@ -47,6 +49,7 @@ using std::endl;
+ //*****************************************************************************************
+ //
+ //*****************************************************************************************
++static int counter = 0;
+ void annealer_thread::Run()
+ {
+ 	int accepted_good_moves=0;
+@@ -86,6 +89,8 @@ void annealer_thread::Run()
+ 			}
+ 		}
+ 		temp_steps_completed++;
++		int old_counter = __sync_fetch_and_add(&counter, 1);
++		copper_eval_iteration(old_counter, 0);
+ #ifdef ENABLE_THREADS
+ 		pthread_barrier_wait(&_barrier);
+ #endif
+diff --git a/pkgs/kernels/canneal/src/main.cpp b/pkgs/kernels/canneal/src/main.cpp
+index 11ef798d..03d48745 100644
+--- a/pkgs/kernels/canneal/src/main.cpp
++++ b/pkgs/kernels/canneal/src/main.cpp
+@@ -33,6 +33,7 @@
+ #include <stdlib.h>
+ #include <unistd.h>
+ #include <vector>
++#include <copper-eval.h>
+ 
+ #ifdef ENABLE_THREADS
+ #include <pthread.h>
+@@ -54,6 +55,10 @@ void* entry_pt(void*);
+ 
+ 
+ int main (int argc, char * const argv[]) {
++	if (copper_eval_init()) {
++		perror("copper_eval_init");
++		exit(1);
++	}
+ #ifdef PARSEC_VERSION
+ #define __PARSEC_STRING(x) #x
+ #define __PARSEC_XSTRING(x) __PARSEC_STRING(x)
+@@ -131,6 +136,9 @@ int main (int argc, char * const argv[]) {
+ 	__parsec_bench_end();
+ #endif
+ 
++	if (copper_eval_finish()) {
++		perror("copper_eval_finish");
++	}
+ 	return 0;
+ }
+ 
+diff --git a/pkgs/kernels/dedup/src/dedup.c b/pkgs/kernels/dedup/src/dedup.c
+index 8c3dc547..70f5a95b 100644
+--- a/pkgs/kernels/dedup/src/dedup.c
++++ b/pkgs/kernels/dedup/src/dedup.c
+@@ -1,5 +1,6 @@
+ #include <unistd.h>
+ #include <string.h>
++#include <copper-eval.h>
+ 
+ #include "util.h"
+ #include "debug.h"
+@@ -152,12 +153,21 @@ int main(int argc, char** argv) {
+   }
+ #endif
+ 
++  if (copper_eval_init()) {
++    perror("copper_eval_init");
++    exit(1);
++  }
++
+   if (compress) {
+     Encode(conf);
+   } else {
+     Decode(conf);
+   }
+ 
++  if (copper_eval_finish()) {
++    perror("copper_eval_finish");
++  }
++
+   free(conf);
+ 
+ #ifdef ENABLE_PARSEC_HOOKS
+diff --git a/pkgs/kernels/dedup/src/encoder.c b/pkgs/kernels/dedup/src/encoder.c
+index 6911a700..0b588b80 100644
+--- a/pkgs/kernels/dedup/src/encoder.c
++++ b/pkgs/kernels/dedup/src/encoder.c
+@@ -25,6 +25,7 @@
+ #include <unistd.h>
+ #include <string.h>
+ #include <sys/stat.h>
++#include <copper-eval.h>
+ 
+ #include "util.h"
+ #include "dedupdef.h"
+@@ -394,6 +395,7 @@ void sub_Compress(chunk_t *chunk) {
+  *  - Enqueue each item into send queue
+  */
+ #ifdef ENABLE_PTHREADS
++static int counter = 0;
+ void *Compress(void * targs) {
+   struct thread_args *args = (struct thread_args *)targs;
+   const int qid = args->tid / MAX_THREADS_PER_QUEUE;
+@@ -438,6 +440,9 @@ void *Compress(void * targs) {
+       r = queue_enqueue(&reorder_que[qid], &send_buf, ITEM_PER_INSERT);
+       assert(r>=1);
+     }
++
++    int old_counter = __sync_fetch_and_add(&counter, 1);
++    copper_eval_iteration(old_counter, 0);
+   }
+ 
+   //Enqueue left over items
+diff --git a/pkgs/kernels/streamcluster/src/streamcluster.cpp b/pkgs/kernels/streamcluster/src/streamcluster.cpp
+index 29ff344e..fa5b17e4 100644
+--- a/pkgs/kernels/streamcluster/src/streamcluster.cpp
++++ b/pkgs/kernels/streamcluster/src/streamcluster.cpp
+@@ -15,6 +15,7 @@
+ #include <math.h>
+ #include <sys/resource.h>
+ #include <limits.h>
++#include <copper-eval.h>
+ 
+ #ifdef ENABLE_THREADS
+ #include <pthread.h>
+@@ -1833,6 +1834,7 @@ void outcenterIDs( Points* centers, long* centerIDs, char* outfile ) {
+   fclose(fp);
+ }
+ 
++static int counter = 0;
+ void streamCluster( PStream* stream, 
+ 		    long kmin, long kmax, int dim,
+ 		    long chunksize, long centersize, char* outfile )
+@@ -1889,6 +1891,9 @@ void streamCluster( PStream* stream,
+     size_t numRead  = stream->read(block, dim, chunksize ); 
+     fprintf(stderr,"read %d points\n",numRead);
+ 
++    int old_counter = __sync_fetch_and_add(&counter, 1);
++    copper_eval_iteration(old_counter, numRead);
++
+     if( stream->ferror() || numRead < (unsigned int)chunksize && !stream->feof() ) {
+       fprintf(stderr, "error reading data!\n");
+       exit(1);
+@@ -1994,7 +1999,10 @@ int main(int argc, char **argv)
+     exit(1);
+   }
+ 
+-
++  if (copper_eval_init()) {
++    perror("copper_eval_init");
++    exit(1);
++  }
+ 
+   kmin = atoi(argv[1]);
+   kmax = atoi(argv[2]);
+@@ -2035,6 +2043,10 @@ int main(int argc, char **argv)
+ 
+   delete stream;
+ 
++  if (copper_eval_finish()) {
++    perror("copper_eval_finish");
++  }
++
+ #ifdef ENABLE_PARSEC_HOOKS
+   __parsec_bench_end();
+ #endif
+diff --git a/pkgs/libs/gsl/src/doc/multimin.texi b/pkgs/libs/gsl/src/doc/multimin.texi
+index 4eb1ae8a..28e60145 100644
+--- a/pkgs/libs/gsl/src/doc/multimin.texi
++++ b/pkgs/libs/gsl/src/doc/multimin.texi
+@@ -133,7 +133,9 @@ accuracy of @var{tol}, where @c{$p\cdot g < tol |p| |g|$}
+ suitable for most purposes, since line minimization only needs to
+ be carried out approximately.    Note that setting @var{tol} to zero will
+ force the use of ``exact'' line-searches, which are extremely expensive.
++@end deftypefun
+ 
++@deftypefun int gsl_multimin_fminimizer_set (gsl_multimin_fminimizer * @var{s}, gsl_multimin_function * @var{f}, const gsl_vector * @var{x}, const gsl_vector * @var{step_size})
+ @deftypefunx int gsl_multimin_fminimizer_set (gsl_multimin_fminimizer * @var{s}, gsl_multimin_function * @var{f}, const gsl_vector * @var{x}, const gsl_vector * @var{step_size})
+ This function initializes the minimizer @var{s} to minimize the function
+ @var{f}, starting from the initial point
+diff --git a/pkgs/libs/gsl/src/doc/qrng.texi b/pkgs/libs/gsl/src/doc/qrng.texi
+index c9dc7398..a710f510 100644
+--- a/pkgs/libs/gsl/src/doc/qrng.texi
++++ b/pkgs/libs/gsl/src/doc/qrng.texi
+@@ -155,6 +155,7 @@ The implementations of the quasi-random sequence routines are based on
+ the algorithms described in the following paper,
+ 
+ @itemize @asis
++@item
+ P. Bratley and B.L. Fox and H. Niederreiter, ``Algorithm 738: Programs
+ to Generate Niederreiter's Low-discrepancy Sequences'', @cite{ACM
+ Transactions on Mathematical Software}, Vol.@: 20, No.@: 4, December, 1994,
+diff --git a/pkgs/libs/gsl/src/doc/rng.texi b/pkgs/libs/gsl/src/doc/rng.texi
+index a947f317..6607576d 100644
+--- a/pkgs/libs/gsl/src/doc/rng.texi
++++ b/pkgs/libs/gsl/src/doc/rng.texi
+@@ -1392,6 +1392,7 @@ Further information is available in the review paper written by Pierre
+ L'Ecuyer,
+ 
+ @itemize @asis
++@item
+ P. L'Ecuyer, ``Random Number Generation'', Chapter 4 of the
+ Handbook on Simulation, Jerry Banks Ed., Wiley, 1998, 93--137.
+ 
+diff --git a/pkgs/libs/hooks/src/Makefile b/pkgs/libs/hooks/src/Makefile
+index f31819b0..cbaddbcf 100644
+--- a/pkgs/libs/hooks/src/Makefile
++++ b/pkgs/libs/hooks/src/Makefile
+@@ -10,6 +10,6 @@
+ # distribution. You also need to make sure that the shared library can be
+ # found at run time. The PARSEC framework already takes care of this.
+ 
+-#include Makefile.static
+-include Makefile.shared
++include Makefile.static
++#include Makefile.shared
+ 
+diff --git a/pkgs/libs/ssl/src/doc/apps/smime.pod b/pkgs/libs/ssl/src/doc/apps/smime.pod
+index caf2d268..c5fa2617 100644
+--- a/pkgs/libs/ssl/src/doc/apps/smime.pod
++++ b/pkgs/libs/ssl/src/doc/apps/smime.pod
+@@ -265,28 +265,28 @@ encrypted data is used for other purposes.
+ 
+ =over 4
+ 
+-=item 0
++=item C<0>
+ 
+ the operation was completely successfully.
+ 
+-=item 1 
++=item C<1>
+ 
+ an error occurred parsing the command options.
+ 
+-=item 2
++=item C<2>
+ 
+ one of the input files could not be read.
+ 
+-=item 3
++=item C<3>
+ 
+ an error occurred creating the PKCS#7 file or when reading the MIME
+ message.
+ 
+-=item 4
++=item C<4>
+ 
+ an error occurred decrypting or verifying the message.
+ 
+-=item 5
++=item C<5>
+ 
+ the message was verified correctly but an error occurred writing out
+ the signers certificates.
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_COMP_add_compression_method.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_COMP_add_compression_method.pod
+index 42fa66b1..80175a3c 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_COMP_add_compression_method.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_COMP_add_compression_method.pod
+@@ -53,11 +53,11 @@ SSL_COMP_add_compression_method() may return the following values:
+ 
+ =over 4
+ 
+-=item 0
++=item C<0>
+ 
+ The operation succeeded.
+ 
+-=item 1
++=item C<1>
+ 
+ The operation failed. Check the error queue to find out the reason.
+ 
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_add_session.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_add_session.pod
+index 82676b26..fd927f8d 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_add_session.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_add_session.pod
+@@ -52,13 +52,13 @@ The following values are returned by all functions:
+ 
+ =over 4
+ 
+-=item 0
++=item C<0>
+ 
+  The operation failed. In case of the add operation, it was tried to add
+  the same (identical) session twice. In case of the remove operation, the
+  session was not found in the cache.
+ 
+-=item 1
++=item C<1>
+  
+  The operation succeeded.
+ 
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_load_verify_locations.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_load_verify_locations.pod
+index 84a799fc..de010652 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_load_verify_locations.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_load_verify_locations.pod
+@@ -100,13 +100,13 @@ The following return values can occur:
+ 
+ =over 4
+ 
+-=item 0
++=item C<0>
+ 
+ The operation failed because B<CAfile> and B<CApath> are NULL or the
+ processing at one of the locations specified failed. Check the error
+ stack to find out the reason.
+ 
+-=item 1
++=item C<1>
+ 
+ The operation succeeded.
+ 
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_set_client_CA_list.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_set_client_CA_list.pod
+index 632b556d..04d0a3c9 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_set_client_CA_list.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_set_client_CA_list.pod
+@@ -66,11 +66,11 @@ values:
+ 
+ =over 4
+ 
+-=item 1
++=item C<1>
+ 
+ The operation succeeded.
+ 
+-=item 0
++=item C<0>
+ 
+ A failure while manipulating the STACK_OF(X509_NAME) object occurred or
+ the X509_NAME could not be extracted from B<cacert>. Check the error stack
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_set_session_id_context.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_set_session_id_context.pod
+index 58fc6855..ed0a81cd 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_set_session_id_context.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_set_session_id_context.pod
+@@ -64,13 +64,13 @@ return the following values:
+ 
+ =over 4
+ 
+-=item 0
++=item C<0>
+ 
+ The length B<sid_ctx_len> of the session id context B<sid_ctx> exceeded
+ the maximum allowed length of B<SSL_MAX_SSL_SESSION_ID_LENGTH>. The error
+ is logged to the error stack.
+ 
+-=item 1
++=item C<1>
+ 
+ The operation succeeded.
+ 
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_set_ssl_version.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_set_ssl_version.pod
+index 00201809..18c0970f 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_set_ssl_version.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_CTX_set_ssl_version.pod
+@@ -42,11 +42,11 @@ and SSL_set_ssl_method():
+ 
+ =over 4
+ 
+-=item 0
++=item C<0>
+ 
+ The new choice failed, check the error stack to find out the reason.
+ 
+-=item 1
++=item C<1>
+ 
+ The operation succeeded.
+ 
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_accept.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_accept.pod
+index cc724c0d..44dbee66 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_accept.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_accept.pod
+@@ -44,12 +44,12 @@ The following return values can occur:
+ 
+ =over 4
+ 
+-=item 1
++=item C<1>
+ 
+ The TLS/SSL handshake was successfully completed, a TLS/SSL connection has been
+ established.
+ 
+-=item 0
++=item C<0>
+ 
+ The TLS/SSL handshake was not successful but was shut down controlled and
+ by the specifications of the TLS/SSL protocol. Call SSL_get_error() with the
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_clear.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_clear.pod
+index 8e077e31..b05b142d 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_clear.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_clear.pod
+@@ -50,12 +50,12 @@ The following return values can occur:
+ 
+ =over 4
+ 
+-=item 0
++=item C<0>
+ 
+ The SSL_clear() operation could not be performed. Check the error stack to
+ find out the reason.
+ 
+-=item 1
++=item C<1>
+ 
+ The SSL_clear() operation was successful.
+ 
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_connect.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_connect.pod
+index cc56ebb7..3257f718 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_connect.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_connect.pod
+@@ -41,12 +41,12 @@ The following return values can occur:
+ 
+ =over 4
+ 
+-=item 1
++=item C<1>
+ 
+ The TLS/SSL handshake was successfully completed, a TLS/SSL connection has been
+ established.
+ 
+-=item 0
++=item C<0>
+ 
+ The TLS/SSL handshake was not successful but was shut down controlled and
+ by the specifications of the TLS/SSL protocol. Call SSL_get_error() with the
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_do_handshake.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_do_handshake.pod
+index 24357645..a0afc27b 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_do_handshake.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_do_handshake.pod
+@@ -45,12 +45,12 @@ The following return values can occur:
+ 
+ =over 4
+ 
+-=item 1
++=item C<1>
+ 
+ The TLS/SSL handshake was successfully completed, a TLS/SSL connection has been
+ established.
+ 
+-=item 0
++=item C<0>
+ 
+ The TLS/SSL handshake was not successful but was shut down controlled and
+ by the specifications of the TLS/SSL protocol. Call SSL_get_error() with the
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_get_fd.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_get_fd.pod
+index 89260b52..639d5eb7 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_get_fd.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_get_fd.pod
+@@ -26,7 +26,7 @@ The following return values can occur:
+ 
+ =over 4
+ 
+-=item -1
++=item C<-1>
+ 
+ The operation failed, because the underlying BIO is not of the correct type
+ (suitable for file descriptors).
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_read.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_read.pod
+index 7038cd2d..3982b814 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_read.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_read.pod
+@@ -86,7 +86,7 @@ The following return values can occur:
+ The read operation was successful; the return value is the number of
+ bytes actually read from the TLS/SSL connection.
+ 
+-=item 0
++=item C<0>
+ 
+ The read operation was not successful. The reason may either be a clean
+ shutdown due to a "close notify" alert sent by the peer (in which case
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_session_reused.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_session_reused.pod
+index da7d0626..033d54c0 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_session_reused.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_session_reused.pod
+@@ -27,11 +27,11 @@ The following return values can occur:
+ 
+ =over 4
+ 
+-=item 0
++=item C<0>
+ 
+ A new session was negotiated.
+ 
+-=item 1
++=item C<1>
+ 
+ A session was reused.
+ 
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_set_fd.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_set_fd.pod
+index 70291128..59e1b2bb 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_set_fd.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_set_fd.pod
+@@ -35,11 +35,11 @@ The following return values can occur:
+ 
+ =over 4
+ 
+-=item 0
++=item C<0>
+ 
+ The operation failed. Check the error stack to find out why.
+ 
+-=item 1
++=item C<1>
+ 
+ The operation succeeded.
+ 
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_set_session.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_set_session.pod
+index 5f54714a..d35e6d3b 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_set_session.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_set_session.pod
+@@ -37,11 +37,11 @@ The following return values can occur:
+ 
+ =over 4
+ 
+-=item 0
++=item C<0>
+ 
+ The operation failed; check the error stack to find out the reason.
+ 
+-=item 1
++=item C<1>
+ 
+ The operation succeeded.
+ 
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_set_shutdown.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_set_shutdown.pod
+index 011a022a..91392114 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_set_shutdown.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_set_shutdown.pod
+@@ -24,7 +24,7 @@ The shutdown state of an ssl connection is a bitmask of:
+ 
+ =over 4
+ 
+-=item 0
++=item C<0>
+ 
+ No shutdown setting, yet.
+ 
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_shutdown.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_shutdown.pod
+index 89911acb..69ad31e8 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_shutdown.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_shutdown.pod
+@@ -92,19 +92,19 @@ The following return values can occur:
+ 
+ =over 4
+ 
+-=item 1
++=item C<1>
+ 
+ The shutdown was successfully completed. The "close notify" alert was sent
+ and the peer's "close notify" alert was received.
+ 
+-=item 0
++=item C<0>
+ 
+ The shutdown is not yet finished. Call SSL_shutdown() for a second time,
+ if a bidirectional shutdown shall be performed.
+ The output of L<SSL_get_error(3)|SSL_get_error(3)> may be misleading, as an
+ erroneous SSL_ERROR_SYSCALL may be flagged even though no error occurred.
+ 
+-=item -1
++=item C<-1>
+ 
+ The shutdown was not successful because a fatal error occurred either
+ at the protocol level or a connection failure occurred. It can also occur if
+diff --git a/pkgs/libs/ssl/src/doc/ssl/SSL_write.pod b/pkgs/libs/ssl/src/doc/ssl/SSL_write.pod
+index e013c12d..30f9e2b4 100644
+--- a/pkgs/libs/ssl/src/doc/ssl/SSL_write.pod
++++ b/pkgs/libs/ssl/src/doc/ssl/SSL_write.pod
+@@ -79,7 +79,7 @@ The following return values can occur:
+ The write operation was successful, the return value is the number of
+ bytes actually written to the TLS/SSL connection.
+ 
+-=item 0
++=item C<0>
+ 
+ The write operation was not successful. Probably the underlying connection
+ was closed. Call SSL_get_error() with the return value B<ret> to find out,

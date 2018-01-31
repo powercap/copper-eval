@@ -1,0 +1,76 @@
+diff --git a/Makefile b/Makefile
+index bba61ef..ca13837 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,18 +1,21 @@
+ CC = gcc
+-CFLAGS = -O2
++CFLAGS = -O2 $(shell pkg-config --cflags copper-eval)
++LDFLAGS = 
++LIBS = $(shell pkg-config --libs --static copper-eval)
+ 
+-FF = g77
++FF = gfortran
+ FFLAGS = -O2
+ 
+ all: stream_f.exe stream_c.exe
+ 
+ stream_f.exe: stream.f mysecond.o
+-	$(CC) $(CFLAGS) -c mysecond.c
++	$(CC) $(CFLAGS) -c mysecond.c $(LDFLAGS) $(LIBS)
+ 	$(FF) $(FFLAGS) -c stream.f
+ 	$(FF) $(FFLAGS) stream.o mysecond.o -o stream_f.exe
+ 
+ stream_c.exe: stream.c
+-	$(CC) $(CFLAGS) stream.c -o stream_c.exe
++	$(CC) $(CFLAGS) stream.c -o stream_c.exe $(LDFLAGS) $(LIBS)
++	$(CC) $(CFLAGS) -O -fopenmp -DOFFSET=13 -DNTIMES=1000 -DOMP_NUM_THREADS=32 stream.c -o stream_omp $(LDFLAGS) $(LIBS)
+ 
+ clean:
+-	rm -f stream_f.exe stream_c.exe *.o
++	rm -f stream_f.exe stream_c.exe stream_omp *.o
+\ No newline at end of file
+diff --git a/stream.c b/stream.c
+index b9a2cee..0204c9c 100644
+--- a/stream.c
++++ b/stream.c
+@@ -47,6 +47,8 @@
+ # include <limits.h>
+ # include <sys/time.h>
+ 
++#include <copper-eval.h>
++
+ /*-----------------------------------------------------------------------
+  * INSTRUCTIONS:
+  *
+@@ -214,6 +216,11 @@ main()
+     STREAM_TYPE		scalar;
+     double		t, times[4][NTIMES];
+ 
++    if (copper_eval_init()) {
++      perror("copper_eval_init");
++      return 1;
++    }
++
+     /* --- SETUP --- determine precision and check timing --- */
+ 
+     printf(HLINE);
+@@ -306,6 +313,7 @@ main()
+     scalar = 3.0;
+     for (k=0; k<NTIMES; k++)
+ 	{
++        copper_eval_iteration(k, 0);
+ 	times[0][k] = mysecond();
+ #ifdef TUNED
+         tuned_STREAM_Copy();
+@@ -375,6 +383,10 @@ main()
+     checkSTREAMresults();
+     printf(HLINE);
+ 
++    if (copper_eval_finish()) {
++      perror("copper_eval_finish");
++    }
++
+     return 0;
+ }
+ 
