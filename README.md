@@ -9,7 +9,7 @@ Testing was performed on Linux: Ubuntu 14.04 (Trusty Tahr) and Ubuntu 16.04 (Xen
 
 For details, please see the following and reference as appropriate:
 
-* Connor Imes, Huazhe Zhang, Kevin Zhao, Henry Hoffmann. "Handing DVFS to Hardware: Using Power Capping to Control Software Performance". Technical Report [TR-2018-03](https://cs.uchicago.edu/research/publications/techreports/TR-2018-03). University of Chicago, Department of Computer Science. 2018.
+* Connor Imes, Huazhe Zhang, Kevin Zhao, Henry Hoffmann. "CoPPer: Soft Real-time Application Performance Using Hardware Power Capping". In: IEEE International Conference on Autonomic Computing (ICAC). 2019.
 
 
 ## Prerequisities
