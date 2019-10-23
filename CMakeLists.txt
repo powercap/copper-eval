@@ -57,10 +57,12 @@ add_library(${PROJECT_NAME} src/copper-eval.c
                             src/copper-eval-cpufreq-bindings.c
                             src/copper-eval-psc.c src/psc/psc.c src/psc/psc-util.c
                             src/copper-eval-dsc.c src/dsc/dsc.c src/dsc/dsc-util.c)
-target_link_libraries(${PROJECT_NAME} ${DYNAMIC_LINKS})
 if(BUILD_SHARED_LIBS)
+  target_link_libraries(${PROJECT_NAME} ${DYNAMIC_LINKS})
   set_target_properties(${PROJECT_NAME} PROPERTIES VERSION ${PROJECT_VERSION}
                                                    SOVERSION ${VERSION_MAJOR})
+else()
+  target_link_libraries(${PROJECT_NAME} ${STATIC_LINKS})
 endif()
 
 
